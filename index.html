@@ -1,11 +1,71 @@
-html
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>CS2 Trade</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS2 Trade — Обмен скинами</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #1b1b1b;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            background: #111;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #f0c040;
+        }
+        .btn-steam {
+            background: #2a475e;
+            color: #fff;
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .btn-steam:hover {
+            background: #1b2838;
+        }
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+        p {
+            color: #aaa;
+            margin-bottom: 30px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Привет, мир обмена скинами!</h1>
+    <header>
+        <div class="logo">CS2 Trade</div>
+        <button class="btn-steam">Войти через Steam</button>
+    </header>
+    <div class="container">
+        <h1>Обменивайся скинами CS2 напрямую</h1>
+        <p>Без посредников и платёжных систем. Только ты и твой трейд-партнёр.</p>
+        <!-- Здесь позже появится функционал -->
+    </div>
 </body>
 </html>
