@@ -47,6 +47,8 @@
             font-size: 15px;
             cursor: pointer;
             border-radius: 4px;
+            text-decoration: none;
+            display: inline-block;
         }
         .btn-steam:hover {
             background: #1b2838;
@@ -87,7 +89,7 @@
             <a href="#">Мои обмены</a>
             <a href="#">О проекте</a>
         </nav>
-        <button class="btn-steam">Войти через Steam</button>
+        <a class="btn-steam" id="auth-button" href="/auth/steam">Войти через Steam</a>
     </header>
     <div class="container">
         <h1>Обменивайся скинами CS2 напрямую</h1>
@@ -96,5 +98,23 @@
             Здесь скоро появятся объявления об обменах
         </div>
     </div>
+    <script>
+        // Проверяем статус входа при загрузке страницы
+        fetch('/api/user')
+            .then(response => response.json())
+            .then(data => {
+                const authButton = document.getElementById('auth-button');
+                if (data.steamId) {
+                    // Пользователь вошёл
+                    authButton.textContent = 'Привет, ' + data.steamId + ' (Выйти)';
+                    authButton.href = '/logout';
+                } else {
+                    // Не вошёл
+                    authButton.textContent = 'Войти через Steam';
+                    authButton.href = '/auth/steam';
+                }
+            })
+            .catch(err => console.error('Ошибка получения статуса:', err));
+    </script>
 </body>
 </html>

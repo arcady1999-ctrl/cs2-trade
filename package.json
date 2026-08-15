@@ -1,0 +1,26 @@
+{
+  "dependencies": {
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "steam-openid": "^1.1.1"
+  },
+  "name": "cs2-trade",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arcady1999-ctrl/cs2-trade.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/arcady1999-ctrl/cs2-trade/issues"
+  },
+  "homepage": "https://github.com/arcady1999-ctrl/cs2-trade#readme"
+}
