@@ -6,6 +6,9 @@ const app = express();
 // Глобальное хранилище ключей пользователей (в памяти)
 const users = {}; // steamId -> { apiKey: '...' }
 
+// Глобальный массив объявлений об обмене
+const offers = []; // { id, steamId, items: [...], want, createdAt }
+
 // Настройка сессий
 app.use(session({
     secret: 'мой_секретный_ключ_для_сессий',
@@ -77,8 +80,6 @@ app.get('/api/inventory', async (req, res) => {
         if (!steamId) {
             return res.status(401).json({ error: 'Необходимо войти' });
         }
-        // Используем Steam Community Web API для инвентаря CS2
-        // Работает без API-ключа, если инвентарь публичный
         const url = `https://steamcommunity.com/inventory/${steamId}/730/2?l=russian&count=75`;
         const response = await fetch(url);
         if (!response.ok) {
@@ -103,6 +104,34 @@ app.get('/api/user', (req, res) => {
     }
 });
 
+// API: получить список объявлений
+app.get('/api/offers', (req, res) => {
+    res.json({ offers });
+});
+
+// API: создать объявление
+app.post('/api/offers', (req, res) => {
+    if (!req.session.steamId) {
+        return res.status(401).json({ error: 'Необходимо войти' });
+    }
+    const { items, want } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: 'Не выбраны предметы' });
+    }
+    if (!want || !want.trim()) {
+        return res.status(400).json({ error: 'Не указано описание желаемого' });
+    }
+    const offer = {
+        id: Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
+        steamId: req.session.steamId,
+        items: items.map(item => String(item)),
+        want: want.trim(),
+        createdAt: new Date().toISOString()
+    };
+    offers.push(offer);
+    res.status(201).json({ ok: true, offer });
+});
+
 // Главная страница
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
@@ -121,7 +150,6 @@ app.get('/auth/steam/return', async (req, res) => {
             return res.status(403).send('Ошибка проверки Steam');
         }
         req.session.steamId = steamId;
-        // Инициализируем запись пользователя, если её нет
         if (!users[steamId]) {
             users[steamId] = { apiKey: '' };
         }
