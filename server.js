@@ -7,7 +7,7 @@ const app = express();
 const users = {}; // steamId -> { apiKey: '...' }
 
 // Глобальный массив объявлений об обмене
-const offers = []; // { id, steamId, items: [...], want, createdAt }
+const offers = []; // { id, steamId, items: [{classid, instanceid, name, icon_url}], want, createdAt }
 
 // Настройка сессий
 app.use(session({
@@ -121,15 +121,36 @@ app.post('/api/offers', (req, res) => {
     if (!want || !want.trim()) {
         return res.status(400).json({ error: 'Не указано описание желаемого' });
     }
+    const validItems = items.every(item => item && item.classid && item.instanceid && item.name && item.icon_url);
+    if (!validItems) {
+        return res.status(400).json({ error: 'Некорректные данные о предметах' });
+    }
     const offer = {
         id: Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
         steamId: req.session.steamId,
-        items: items.map(item => String(item)),
+        items: items,
         want: want.trim(),
         createdAt: new Date().toISOString()
     };
     offers.push(offer);
     res.status(201).json({ ok: true, offer });
+});
+
+// API: удалить объявление (только своё)
+app.delete('/api/offers/:id', (req, res) => {
+    if (!req.session.steamId) {
+        return res.status(401).json({ error: 'Необходимо войти' });
+    }
+    const offerId = req.params.id;
+    const index = offers.findIndex(offer => offer.id === offerId);
+    if (index === -1) {
+        return res.status(404).json({ error: 'Объявление не найдено' });
+    }
+    if (offers[index].steamId !== req.session.steamId) {
+        return res.status(403).json({ error: 'Вы не можете удалить чужое объявление' });
+    }
+    offers.splice(index, 1);
+    res.json({ ok: true });
 });
 
 // Главная страница

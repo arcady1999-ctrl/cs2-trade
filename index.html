@@ -100,6 +100,7 @@
             cursor: pointer;
             border-radius: 4px;
             margin: 5px;
+            text-decoration: none;
         }
         .btn-secondary:hover { background: #1b2838; }
         .inventory-grid {
@@ -163,9 +164,18 @@
             gap: 5px;
             flex-wrap: wrap;
         }
-        .offer-items img {
+        .offer-item {
+            background: #333;
+            border-radius: 4px;
+            padding: 5px;
+            text-align: center;
+            width: 80px;
+            font-size: 12px;
+        }
+        .offer-item img {
             width: 40px;
             height: 40px;
+            object-fit: contain;
         }
         .offer-want {
             color: #ccc;
@@ -240,6 +250,7 @@
     <script>
         let myInventory = null;
         let selectedItems = new Set(); // хранит ключи 'classid_instanceid'
+        let currentSteamId = null;
 
         // Проверка статуса входа
         function checkAuth() {
@@ -249,6 +260,7 @@
                     const authButton = document.getElementById('auth-button');
                     const createSection = document.getElementById('create-offer-section');
                     if (data.steamId) {
+                        currentSteamId = data.steamId;
                         authButton.textContent = 'Привет, ' + data.steamId + ' (Выйти)';
                         authButton.href = '/logout';
                         createSection.style.display = 'block';
@@ -361,7 +373,33 @@
                 message.textContent = 'Выберите хотя бы один предмет из инвентаря (нажмите на карточку).';
                 return;
             }
-            const itemsArray = Array.from(selectedItems);
+
+            const descriptions = {};
+            if (myInventory && myInventory.descriptions) {
+                myInventory.descriptions.forEach(desc => {
+                    const key = desc.classid + '_' + desc.instanceid;
+                    descriptions[key] = desc;
+                });
+            }
+
+            const itemsArray = [];
+            selectedItems.forEach(key => {
+                const desc = descriptions[key];
+                if (desc) {
+                    itemsArray.push({
+                        classid: desc.classid,
+                        instanceid: desc.instanceid,
+                        name: desc.market_hash_name || 'Неизвестный предмет',
+                        icon_url: desc.icon_url || ''
+                    });
+                }
+            });
+
+            if (itemsArray.length === 0) {
+                message.textContent = 'Не удалось получить данные выбранных предметов.';
+                return;
+            }
+
             fetch('/api/offers', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -403,20 +441,25 @@
                                 <div class="offer-want"><strong>Хочет:</strong> ${escapeHtml(offer.want)}</div>
                                 <div class="offer-user">Steam ID: ${escapeHtml(offer.steamId)}</div>
                                 <div class="offer-date">${new Date(offer.createdAt).toLocaleString()}</div>
+                                <a href="https://steamcommunity.com/profiles/${escapeHtml(offer.steamId)}" target="_blank" class="btn-secondary" style="display: inline-block; margin-top: 5px;">Открыть профиль</a>
+                                ${offer.steamId === currentSteamId ? `<button class="btn-secondary" onclick="deleteOffer('${offer.id}')" style="margin-top: 5px;">Удалить</button>` : ''}
                             `;
                             card.appendChild(info);
 
-                            // Показываем предметы (только классы, нужны картинки из инвентаря, но у нас нет описания тут; можно просто перечислить)
                             const itemsDiv = document.createElement('div');
                             itemsDiv.className = 'offer-items';
-                            offer.items.forEach(itemKey => {
-                                const span = document.createElement('span');
-                                span.style.fontSize = '12px';
-                                span.style.background = '#333';
-                                span.style.padding = '2px 6px';
-                                span.style.borderRadius = '4px';
-                                span.textContent = itemKey;
-                                itemsDiv.appendChild(span);
+                            offer.items.forEach(item => {
+                                const itemDiv = document.createElement('div');
+                                itemDiv.className = 'offer-item';
+                                const img = document.createElement('img');
+                                img.src = 'https://community.akamai.steamstatic.com/economy/image/' + item.icon_url;
+                                img.alt = item.name;
+                                img.loading = 'lazy';
+                                const nameDiv = document.createElement('div');
+                                nameDiv.textContent = item.name;
+                                itemDiv.appendChild(img);
+                                itemDiv.appendChild(nameDiv);
+                                itemsDiv.appendChild(itemDiv);
                             });
                             card.appendChild(itemsDiv);
 
@@ -429,6 +472,20 @@
                 .catch(err => {
                     list.innerHTML = '<div style="color: #ff6b6b;">Ошибка загрузки объявлений.</div>';
                 });
+        }
+
+        function deleteOffer(offerId) {
+            if (!confirm('Удалить это объявление?')) return;
+            fetch('/api/offers/' + offerId, { method: 'DELETE' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        alert('Ошибка: ' + data.error);
+                        return;
+                    }
+                    loadOffers();
+                })
+                .catch(err => alert('Ошибка сети: ' + err));
         }
 
         function escapeHtml(text) {
