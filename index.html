@@ -164,6 +164,27 @@
             flex: 1;
             min-width: 200px;
         }
+        .offer-author {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+        .offer-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: #333;
+        }
+        .offer-nickname {
+            font-weight: bold;
+            color: #ddd;
+        }
+        .offer-steamid {
+            color: #888;
+            font-size: 12px;
+        }
         .offer-items {
             display: flex;
             gap: 5px;
@@ -185,10 +206,6 @@
         .offer-want {
             color: #ccc;
             margin: 5px 0;
-        }
-        .offer-user {
-            color: #aaa;
-            font-size: 14px;
         }
         .offer-date {
             color: #666;
@@ -448,7 +465,7 @@
             });
         }
 
-        // Загрузка объявлений
+        // Загрузка объявлений с профилями авторов
         function loadOffers() {
             const list = document.getElementById('offer-list');
             list.innerHTML = '<div style="color: #888;">Загрузка объявлений...</div>';
@@ -456,10 +473,34 @@
                 .then(r => r.json())
                 .then(data => {
                     allOffers = data.offers || [];
+                    // Получаем уникальные steamId
+                    const steamIds = [...new Set(allOffers.map(o => o.steamId))];
+                    // Загружаем профили всех авторов
+                    return Promise.all(steamIds.map(id =>
+                        fetch(`/api/profile/${id}`)
+                            .then(r => r.json())
+                            .then(profile => ({ id, profile }))
+                            .catch(() => ({ id, profile: null }))
+                    ));
+                })
+                .then(profiles => {
+                    const profileMap = {};
+                    profiles.forEach(p => { profileMap[p.id] = p.profile; });
+                    allOffers.forEach(offer => {
+                        const prof = profileMap[offer.steamId];
+                        if (prof && prof.nickname) {
+                            offer.authorName = prof.nickname;
+                            offer.authorAvatar = prof.avatar;
+                        } else {
+                            offer.authorName = offer.steamId;
+                            offer.authorAvatar = null;
+                        }
+                    });
                     applyFilters();
                 })
                 .catch(err => {
                     list.innerHTML = '<div style="color: #ff6b6b;">Ошибка загрузки объявлений.</div>';
+                    console.error(err);
                 });
         }
 
@@ -493,7 +534,7 @@
             applyFilters();
         }
 
-        // Отображение объявлений
+        // Отображение объявлений с аватарами и никами
         function renderOffers(offersToShow) {
             const list = document.getElementById('offer-list');
             if (offersToShow.length > 0) {
@@ -504,15 +545,60 @@
 
                     const info = document.createElement('div');
                     info.className = 'offer-info';
-                    info.innerHTML = `
-                        <div class="offer-want"><strong>Хочет:</strong> ${escapeHtml(offer.want)}</div>
-                        <div class="offer-user">Steam ID: ${escapeHtml(offer.steamId)}</div>
-                        <div class="offer-date">${new Date(offer.createdAt).toLocaleString()}</div>
-                        <a href="https://steamcommunity.com/profiles/${escapeHtml(offer.steamId)}" target="_blank" class="btn-secondary" style="display: inline-block; margin-top: 5px;">Открыть профиль</a>
-                        ${offer.steamId === currentSteamId ? `<button class="btn-secondary" onclick="deleteOffer('${offer.id}')" style="margin-top: 5px;">Удалить</button>` : ''}
-                    `;
+
+                    // Блок автора
+                    const authorDiv = document.createElement('div');
+                    authorDiv.className = 'offer-author';
+                    if (offer.authorAvatar) {
+                        const avatarImg = document.createElement('img');
+                        avatarImg.className = 'offer-avatar';
+                        avatarImg.src = offer.authorAvatar;
+                        avatarImg.alt = offer.authorName;
+                        authorDiv.appendChild(avatarImg);
+                    }
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'offer-nickname';
+                    nameDiv.textContent = offer.authorName || offer.steamId;
+                    authorDiv.appendChild(nameDiv);
+                    if (offer.authorName && offer.authorName !== offer.steamId) {
+                        const steamIdDiv = document.createElement('div');
+                        steamIdDiv.className = 'offer-steamid';
+                        steamIdDiv.textContent = offer.steamId;
+                        authorDiv.appendChild(steamIdDiv);
+                    }
+                    info.appendChild(authorDiv);
+
+                    const wantDiv = document.createElement('div');
+                    wantDiv.className = 'offer-want';
+                    wantDiv.innerHTML = `<strong>Хочет:</strong> ${escapeHtml(offer.want)}`;
+                    info.appendChild(wantDiv);
+
+                    const dateDiv = document.createElement('div');
+                    dateDiv.className = 'offer-date';
+                    dateDiv.textContent = new Date(offer.createdAt).toLocaleString();
+                    info.appendChild(dateDiv);
+
+                    const profileLink = document.createElement('a');
+                    profileLink.href = `https://steamcommunity.com/profiles/${offer.steamId}`;
+                    profileLink.target = '_blank';
+                    profileLink.className = 'btn-secondary';
+                    profileLink.style.display = 'inline-block';
+                    profileLink.style.marginTop = '5px';
+                    profileLink.textContent = 'Открыть профиль';
+                    info.appendChild(profileLink);
+
+                    if (offer.steamId === currentSteamId) {
+                        const delBtn = document.createElement('button');
+                        delBtn.className = 'btn-secondary';
+                        delBtn.style.marginTop = '5px';
+                        delBtn.textContent = 'Удалить';
+                        delBtn.onclick = () => deleteOffer(offer.id);
+                        info.appendChild(delBtn);
+                    }
+
                     card.appendChild(info);
 
+                    // Предметы
                     const itemsDiv = document.createElement('div');
                     itemsDiv.className = 'offer-items';
                     offer.items.forEach(item => {
@@ -522,10 +608,10 @@
                         img.src = 'https://community.akamai.steamstatic.com/economy/image/' + item.icon_url;
                         img.alt = item.name;
                         img.loading = 'lazy';
-                        const nameDiv = document.createElement('div');
-                        nameDiv.textContent = item.name;
+                        const nameItemDiv = document.createElement('div');
+                        nameItemDiv.textContent = item.name;
                         itemDiv.appendChild(img);
-                        itemDiv.appendChild(nameDiv);
+                        itemDiv.appendChild(nameItemDiv);
                         itemsDiv.appendChild(itemDiv);
                     });
                     card.appendChild(itemsDiv);
@@ -560,7 +646,7 @@
         // Инициализация: сначала авторизация, затем загрузка объявлений
         checkAuth()
             .then(() => loadOffers())
-            .catch(() => loadOffers()); // даже если ошибка, пробуем загрузить объявления
+            .catch(() => loadOffers());
     </script>
 </body>
 </html>

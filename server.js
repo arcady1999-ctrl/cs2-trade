@@ -6,7 +6,7 @@ const app = express();
 
 // Инициализация базы данных
 const db = new Database('trade.db');
-db.pragma('journal_mode = WAL'); // для надёжности
+db.pragma('journal_mode = WAL');
 
 // Создание таблиц, если их нет
 db.exec(`
@@ -22,6 +22,26 @@ db.exec(`
         createdAt TEXT NOT NULL
     );
 `);
+
+// Кэш профилей (в памяти)
+const profileCache = {}; // steamId -> { nickname, avatar, updatedAt }
+
+// Функция получения профиля из Steam Community (без API-ключа)
+async function fetchSteamProfile(steamId) {
+    const url = `https://steamcommunity.com/profiles/${steamId}/?xml=1`;
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Steam profile error: ${response.status}`);
+    }
+    const xml = await response.text();
+    // Извлекаем никнейм
+    const nameMatch = xml.match(/<steamID><!\[CDATA\[(.*?)\]\]><\/steamID>/);
+    const nickname = nameMatch ? nameMatch[1] : null;
+    // Извлекаем аватар
+    const avatarMatch = xml.match(/<avatarFull><!\[CDATA\[(.*?)\]\]><\/avatarFull>/);
+    const avatar = avatarMatch ? avatarMatch[1] : null;
+    return { nickname, avatar };
+}
 
 // Настройка сессий
 app.use(session({
@@ -119,10 +139,30 @@ app.get('/api/user', (req, res) => {
     }
 });
 
+// API: получить профиль пользователя (ник и аватар)
+app.get('/api/profile/:steamId', async (req, res) => {
+    const steamId = req.params.steamId;
+    if (!steamId) {
+        return res.status(400).json({ error: 'Steam ID не указан' });
+    }
+    // Проверяем кэш (если свежий)
+    const cached = profileCache[steamId];
+    if (cached && (Date.now() - cached.updatedAt) < 24 * 60 * 60 * 1000) {
+        return res.json({ steamId, nickname: cached.nickname, avatar: cached.avatar });
+    }
+    try {
+        const profile = await fetchSteamProfile(steamId);
+        profileCache[steamId] = { ...profile, updatedAt: Date.now() };
+        res.json({ steamId, nickname: profile.nickname, avatar: profile.avatar });
+    } catch (err) {
+        console.error(`Ошибка получения профиля ${steamId}:`, err);
+        res.status(500).json({ error: 'Не удалось получить профиль Steam' });
+    }
+});
+
 // API: получить список объявлений
 app.get('/api/offers', (req, res) => {
     const rows = db.prepare('SELECT * FROM offers ORDER BY createdAt DESC').all();
-    // Преобразуем items из JSON-строки обратно в массив
     const offers = rows.map(row => ({
         id: row.id,
         steamId: row.steamId,
@@ -193,7 +233,6 @@ app.get('/auth/steam/return', async (req, res) => {
             return res.status(403).send('Ошибка проверки Steam');
         }
         req.session.steamId = steamId;
-        // Добавляем пользователя в базу, если его нет
         db.prepare('INSERT OR IGNORE INTO users (steamId) VALUES (?)').run(steamId);
         res.redirect('/');
     } catch (err) {
