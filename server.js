@@ -1,13 +1,27 @@
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
+const Database = require('better-sqlite3');
 const app = express();
 
-// Глобальное хранилище ключей пользователей (в памяти)
-const users = {}; // steamId -> { apiKey: '...' }
+// Инициализация базы данных
+const db = new Database('trade.db');
+db.pragma('journal_mode = WAL'); // для надёжности
 
-// Глобальный массив объявлений об обмене
-const offers = []; // { id, steamId, items: [{classid, instanceid, name, icon_url}], want, createdAt }
+// Создание таблиц, если их нет
+db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+        steamId TEXT PRIMARY KEY,
+        apiKey TEXT DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS offers (
+        id TEXT PRIMARY KEY,
+        steamId TEXT NOT NULL,
+        items TEXT NOT NULL,
+        want TEXT NOT NULL,
+        createdAt TEXT NOT NULL
+    );
+`);
 
 // Настройка сессий
 app.use(session({
@@ -97,7 +111,8 @@ app.get('/api/inventory', async (req, res) => {
 app.get('/api/user', (req, res) => {
     if (req.session.steamId) {
         const steamId = req.session.steamId;
-        const hasApiKey = !!(users[steamId] && users[steamId].apiKey);
+        const row = db.prepare('SELECT apiKey FROM users WHERE steamId = ?').get(steamId);
+        const hasApiKey = !!(row && row.apiKey);
         res.json({ steamId, hasApiKey });
     } else {
         res.json({ steamId: null });
@@ -106,6 +121,15 @@ app.get('/api/user', (req, res) => {
 
 // API: получить список объявлений
 app.get('/api/offers', (req, res) => {
+    const rows = db.prepare('SELECT * FROM offers ORDER BY createdAt DESC').all();
+    // Преобразуем items из JSON-строки обратно в массив
+    const offers = rows.map(row => ({
+        id: row.id,
+        steamId: row.steamId,
+        items: JSON.parse(row.items),
+        want: row.want,
+        createdAt: row.createdAt
+    }));
     res.json({ offers });
 });
 
@@ -125,14 +149,12 @@ app.post('/api/offers', (req, res) => {
     if (!validItems) {
         return res.status(400).json({ error: 'Некорректные данные о предметах' });
     }
-    const offer = {
-        id: Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
-        steamId: req.session.steamId,
-        items: items,
-        want: want.trim(),
-        createdAt: new Date().toISOString()
-    };
-    offers.push(offer);
+    const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 4);
+    const createdAt = new Date().toISOString();
+    const itemsJson = JSON.stringify(items);
+    db.prepare('INSERT INTO offers (id, steamId, items, want, createdAt) VALUES (?, ?, ?, ?, ?)')
+      .run(id, req.session.steamId, itemsJson, want.trim(), createdAt);
+    const offer = { id, steamId: req.session.steamId, items, want: want.trim(), createdAt };
     res.status(201).json({ ok: true, offer });
 });
 
@@ -142,14 +164,14 @@ app.delete('/api/offers/:id', (req, res) => {
         return res.status(401).json({ error: 'Необходимо войти' });
     }
     const offerId = req.params.id;
-    const index = offers.findIndex(offer => offer.id === offerId);
-    if (index === -1) {
+    const row = db.prepare('SELECT steamId FROM offers WHERE id = ?').get(offerId);
+    if (!row) {
         return res.status(404).json({ error: 'Объявление не найдено' });
     }
-    if (offers[index].steamId !== req.session.steamId) {
+    if (row.steamId !== req.session.steamId) {
         return res.status(403).json({ error: 'Вы не можете удалить чужое объявление' });
     }
-    offers.splice(index, 1);
+    db.prepare('DELETE FROM offers WHERE id = ?').run(offerId);
     res.json({ ok: true });
 });
 
@@ -171,9 +193,8 @@ app.get('/auth/steam/return', async (req, res) => {
             return res.status(403).send('Ошибка проверки Steam');
         }
         req.session.steamId = steamId;
-        if (!users[steamId]) {
-            users[steamId] = { apiKey: '' };
-        }
+        // Добавляем пользователя в базу, если его нет
+        db.prepare('INSERT OR IGNORE INTO users (steamId) VALUES (?)').run(steamId);
         res.redirect('/');
     } catch (err) {
         console.error(err);
@@ -199,10 +220,8 @@ app.post('/settings', (req, res) => {
     if (!apiKey) {
         return res.status(400).send('Ключ не указан');
     }
-    if (!users[steamId]) {
-        users[steamId] = {};
-    }
-    users[steamId].apiKey = apiKey;
+    db.prepare('INSERT INTO users (steamId, apiKey) VALUES (?, ?) ON CONFLICT(steamId) DO UPDATE SET apiKey = ?')
+      .run(steamId, apiKey, apiKey);
     res.redirect('/settings?saved=1');
 });
 
@@ -216,4 +235,5 @@ app.get('/logout', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Сервер запущен: http://localhost:${PORT}`);
+    console.log('База данных: trade.db');
 });

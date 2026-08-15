@@ -36,8 +36,13 @@
             color: #ccc;
             text-decoration: none;
             font-size: 16px;
+            cursor: pointer;
         }
         nav a:hover { color: #fff; }
+        nav a.active {
+            color: #f0c040;
+            font-weight: bold;
+        }
         .btn-steam {
             background: #2a475e;
             color: #fff;
@@ -189,6 +194,20 @@
             color: #666;
             font-size: 12px;
         }
+        .search-box {
+            margin-bottom: 15px;
+            width: 100%;
+            max-width: 400px;
+        }
+        .search-box input {
+            width: 100%;
+            padding: 10px;
+            background: #1b1b1b;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 4px;
+            font-size: 16px;
+        }
         .hidden { display: none; }
         .form-group {
             margin-bottom: 15px;
@@ -214,8 +233,8 @@
     <header>
         <div class="logo">CS2 Trade</div>
         <nav>
-            <a href="#">Главная</a>
-            <a href="#">Мои обмены</a>
+            <a id="nav-all" href="#" onclick="setFilter('all'); return false;">Главная</a>
+            <a id="nav-my" href="#" onclick="setFilter('my'); return false;">Мои обмены</a>
             <a href="/settings">Настройки</a>
             <a class="btn-steam" id="auth-button" href="/auth/steam">Войти через Steam</a>
         </nav>
@@ -241,6 +260,9 @@
         <!-- Секция: Список объявлений -->
         <div class="section">
             <div class="section-title">Объявления об обмене</div>
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Поиск по желаемому предмету..." oninput="applyFilters()">
+            </div>
             <div class="offer-list" id="offer-list">
                 <div style="color: #888;">Загрузка объявлений...</div>
             </div>
@@ -251,10 +273,12 @@
         let myInventory = null;
         let selectedItems = new Set(); // хранит ключи 'classid_instanceid'
         let currentSteamId = null;
+        let allOffers = []; // все объявления
+        let showMyOffers = false; // фильтр "только мои"
 
-        // Проверка статуса входа
+        // Проверка статуса входа (теперь возвращает Promise)
         function checkAuth() {
-            fetch('/api/user')
+            return fetch('/api/user')
                 .then(r => r.json())
                 .then(data => {
                     const authButton = document.getElementById('auth-button');
@@ -270,7 +294,9 @@
                         createSection.style.display = 'none';
                     }
                 })
-                .catch(err => console.error('Ошибка получения статуса:', err));
+                .catch(err => {
+                    console.error('Ошибка получения статуса:', err);
+                });
         }
 
         // Загрузка инвентаря и отображение с возможностью выбора
@@ -429,49 +455,86 @@
             fetch('/api/offers')
                 .then(r => r.json())
                 .then(data => {
-                    if (data.offers && data.offers.length > 0) {
-                        list.innerHTML = '';
-                        data.offers.forEach(offer => {
-                            const card = document.createElement('div');
-                            card.className = 'offer-card';
-
-                            const info = document.createElement('div');
-                            info.className = 'offer-info';
-                            info.innerHTML = `
-                                <div class="offer-want"><strong>Хочет:</strong> ${escapeHtml(offer.want)}</div>
-                                <div class="offer-user">Steam ID: ${escapeHtml(offer.steamId)}</div>
-                                <div class="offer-date">${new Date(offer.createdAt).toLocaleString()}</div>
-                                <a href="https://steamcommunity.com/profiles/${escapeHtml(offer.steamId)}" target="_blank" class="btn-secondary" style="display: inline-block; margin-top: 5px;">Открыть профиль</a>
-                                ${offer.steamId === currentSteamId ? `<button class="btn-secondary" onclick="deleteOffer('${offer.id}')" style="margin-top: 5px;">Удалить</button>` : ''}
-                            `;
-                            card.appendChild(info);
-
-                            const itemsDiv = document.createElement('div');
-                            itemsDiv.className = 'offer-items';
-                            offer.items.forEach(item => {
-                                const itemDiv = document.createElement('div');
-                                itemDiv.className = 'offer-item';
-                                const img = document.createElement('img');
-                                img.src = 'https://community.akamai.steamstatic.com/economy/image/' + item.icon_url;
-                                img.alt = item.name;
-                                img.loading = 'lazy';
-                                const nameDiv = document.createElement('div');
-                                nameDiv.textContent = item.name;
-                                itemDiv.appendChild(img);
-                                itemDiv.appendChild(nameDiv);
-                                itemsDiv.appendChild(itemDiv);
-                            });
-                            card.appendChild(itemsDiv);
-
-                            list.appendChild(card);
-                        });
-                    } else {
-                        list.innerHTML = '<div style="color: #888;">Пока нет объявлений.</div>';
-                    }
+                    allOffers = data.offers || [];
+                    applyFilters();
                 })
                 .catch(err => {
                     list.innerHTML = '<div style="color: #ff6b6b;">Ошибка загрузки объявлений.</div>';
                 });
+        }
+
+        // Применение фильтров (поиск + "мои")
+        function applyFilters() {
+            const query = document.getElementById('search-input').value.toLowerCase().trim();
+            let filtered = allOffers;
+
+            if (showMyOffers && currentSteamId) {
+                filtered = filtered.filter(offer => offer.steamId === currentSteamId);
+            }
+
+            if (query) {
+                filtered = filtered.filter(offer => offer.want.toLowerCase().includes(query));
+            }
+
+            renderOffers(filtered);
+        }
+
+        // Переключение фильтра "мои/все"
+        function setFilter(mode) {
+            if (mode === 'my') {
+                showMyOffers = true;
+                document.getElementById('nav-my').classList.add('active');
+                document.getElementById('nav-all').classList.remove('active');
+            } else {
+                showMyOffers = false;
+                document.getElementById('nav-all').classList.add('active');
+                document.getElementById('nav-my').classList.remove('active');
+            }
+            applyFilters();
+        }
+
+        // Отображение объявлений
+        function renderOffers(offersToShow) {
+            const list = document.getElementById('offer-list');
+            if (offersToShow.length > 0) {
+                list.innerHTML = '';
+                offersToShow.forEach(offer => {
+                    const card = document.createElement('div');
+                    card.className = 'offer-card';
+
+                    const info = document.createElement('div');
+                    info.className = 'offer-info';
+                    info.innerHTML = `
+                        <div class="offer-want"><strong>Хочет:</strong> ${escapeHtml(offer.want)}</div>
+                        <div class="offer-user">Steam ID: ${escapeHtml(offer.steamId)}</div>
+                        <div class="offer-date">${new Date(offer.createdAt).toLocaleString()}</div>
+                        <a href="https://steamcommunity.com/profiles/${escapeHtml(offer.steamId)}" target="_blank" class="btn-secondary" style="display: inline-block; margin-top: 5px;">Открыть профиль</a>
+                        ${offer.steamId === currentSteamId ? `<button class="btn-secondary" onclick="deleteOffer('${offer.id}')" style="margin-top: 5px;">Удалить</button>` : ''}
+                    `;
+                    card.appendChild(info);
+
+                    const itemsDiv = document.createElement('div');
+                    itemsDiv.className = 'offer-items';
+                    offer.items.forEach(item => {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'offer-item';
+                        const img = document.createElement('img');
+                        img.src = 'https://community.akamai.steamstatic.com/economy/image/' + item.icon_url;
+                        img.alt = item.name;
+                        img.loading = 'lazy';
+                        const nameDiv = document.createElement('div');
+                        nameDiv.textContent = item.name;
+                        itemDiv.appendChild(img);
+                        itemDiv.appendChild(nameDiv);
+                        itemsDiv.appendChild(itemDiv);
+                    });
+                    card.appendChild(itemsDiv);
+
+                    list.appendChild(card);
+                });
+            } else {
+                list.innerHTML = '<div style="color: #888;">Пока нет объявлений.</div>';
+            }
         }
 
         function deleteOffer(offerId) {
@@ -494,9 +557,10 @@
             return div.innerHTML;
         }
 
-        // Инициализация
-        checkAuth();
-        loadOffers();
+        // Инициализация: сначала авторизация, затем загрузка объявлений
+        checkAuth()
+            .then(() => loadOffers())
+            .catch(() => loadOffers()); // даже если ошибка, пробуем загрузить объявления
     </script>
 </body>
 </html>

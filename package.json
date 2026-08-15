@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "steam-openid": "^1.1.1"

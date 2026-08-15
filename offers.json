@@ -1,0 +1,42 @@
+[
+  {
+    "id": "mstrjopqcv68",
+    "steamId": "76561198041373968",
+    "items": [
+      {
+        "classid": "241601974",
+        "instanceid": "6611054215",
+        "name": "M4A1-S | Nitro (Field-Tested)",
+        "icon_url": "i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFS4_ega6F_H-OcMWiCwOBxtd5oTCq2mwk0jDCAnobsLGWQPwMoW5VxTLEMsxK4moazP-vj5ALciIkWzCX72HhL5nts4b1QV6tz5OSJ2HJmNovH"
+      },
+      {
+        "classid": "7993038030",
+        "instanceid": "7680136121",
+        "name": "M4A1-S | Nightmare (Field-Tested)",
+        "icon_url": "i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFS4_ega6F_H_OGMWrEwL9lj-9gSCGnmBw1tgKIn4vwNCaJaAJ1WZNwE-Rft0G8kIKyNui24lPcjoNFn3n3iCtMuHo447tWVfcjqbqX0V8N9uh_hA"
+      },
+      {
+        "classid": "7993035653",
+        "instanceid": "6276298930",
+        "name": "AK-47 | Wintergreen (Field-Tested)",
+        "icon_url": "i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wjFU6s2jbbBsLPyaDViX0-tzvt47cCS2kRQyvnPSydeqcyqVPQUoC8YkRe4PtkK_m4fiY-yw5lCMgt0Xznj_334avHtp_a9cBvXwlabr"
+      }
+    ],
+    "want": "AK-47 RED LINE (Field-Tested)",
+    "createdAt": "2026-08-15T02:35:02.750Z"
+  },
+  {
+    "id": "mstrlcchuge6",
+    "steamId": "76561198041373968",
+    "items": [
+      {
+        "classid": "7993037326",
+        "instanceid": "6276877717",
+        "name": "MP7 | Fade (Minimal Wear)",
+        "icon_url": "i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf_CNk6fOqbZtgMKesAm6Xyfo45LQ7Fy3rzR536j6HyYn6J3zFaAcjA5RwQ-9fs0O5m93nMe2x5QHfjZUFk3sMNd5yQw"
+      }
+    ],
+    "want": "AWP BOOM (Factory New)",
+    "createdAt": "2026-08-15T02:36:20.033Z"
+  }
+]
