@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const session = require('express-session');
 const Database = require('better-sqlite3');
+const sqliteStoreFactory = require('better-sqlite3-session-store')(session);
 const app = express();
 
 // Инициализация базы данных
@@ -21,31 +22,23 @@ db.exec(`
         want TEXT NOT NULL,
         createdAt TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS sessions (
+        sid TEXT PRIMARY KEY,
+        sess TEXT NOT NULL,
+        expire INTEGER NOT NULL
+    );
 `);
 
-// Кэш профилей (в памяти)
-const profileCache = {}; // steamId -> { nickname, avatar, updatedAt }
-
-// Функция получения профиля из Steam Community (без API-ключа)
-async function fetchSteamProfile(steamId) {
-    const url = `https://steamcommunity.com/profiles/${steamId}/?xml=1`;
-    const response = await fetch(url);
-    if (!response.ok) {
-        throw new Error(`Steam profile error: ${response.status}`);
-    }
-    const xml = await response.text();
-    // Извлекаем никнейм
-    const nameMatch = xml.match(/<steamID><!\[CDATA\[(.*?)\]\]><\/steamID>/);
-    const nickname = nameMatch ? nameMatch[1] : null;
-    // Извлекаем аватар
-    const avatarMatch = xml.match(/<avatarFull><!\[CDATA\[(.*?)\]\]><\/avatarFull>/);
-    const avatar = avatarMatch ? avatarMatch[1] : null;
-    return { nickname, avatar };
-}
+// Настройка хранилища сессий в SQLite
+const sessionStore = new sqliteStoreFactory({
+    client: db,
+    expired: { clear: true, intervalMs: 900000 } // очистка каждые 15 минут
+});
 
 // Настройка сессий
 app.use(session({
     secret: 'мой_секретный_ключ_для_сессий',
+    store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: { maxAge: 24 * 60 * 60 * 1000 } // 1 день
