@@ -3,6 +3,9 @@ const path = require('path');
 const session = require('express-session');
 const app = express();
 
+// Глобальное хранилище ключей пользователей (в памяти)
+const users = {}; // steamId -> { apiKey: '...' }
+
 // Настройка сессий
 app.use(session({
     secret: 'мой_секретный_ключ_для_сессий',
@@ -10,6 +13,10 @@ app.use(session({
     saveUninitialized: false,
     cookie: { maxAge: 24 * 60 * 60 * 1000 } // 1 день
 }));
+
+// Для обработки POST-запросов
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
 // Отдаём статические файлы
 app.use(express.static(__dirname));
@@ -66,7 +73,9 @@ async function verifySteamLogin(req) {
 // API: текущий пользователь
 app.get('/api/user', (req, res) => {
     if (req.session.steamId) {
-        res.json({ steamId: req.session.steamId });
+        const steamId = req.session.steamId;
+        const hasApiKey = !!(users[steamId] && users[steamId].apiKey);
+        res.json({ steamId, hasApiKey });
     } else {
         res.json({ steamId: null });
     }
@@ -90,11 +99,40 @@ app.get('/auth/steam/return', async (req, res) => {
             return res.status(403).send('Ошибка проверки Steam');
         }
         req.session.steamId = steamId;
+        // Инициализируем запись пользователя, если её нет
+        if (!users[steamId]) {
+            users[steamId] = { apiKey: '' };
+        }
         res.redirect('/');
     } catch (err) {
         console.error(err);
         res.status(500).send('Внутренняя ошибка сервера');
     }
+});
+
+// Маршрут: страница настроек (только для вошедших)
+app.get('/settings', (req, res) => {
+    if (!req.session.steamId) {
+        return res.redirect('/auth/steam');
+    }
+    res.sendFile(path.join(__dirname, 'settings.html'));
+});
+
+// Обработка отправки ключа
+app.post('/settings', (req, res) => {
+    if (!req.session.steamId) {
+        return res.status(401).send('Необходимо войти');
+    }
+    const steamId = req.session.steamId;
+    const apiKey = req.body.apiKey && req.body.apiKey.trim();
+    if (!apiKey) {
+        return res.status(400).send('Ключ не указан');
+    }
+    if (!users[steamId]) {
+        users[steamId] = {};
+    }
+    users[steamId].apiKey = apiKey;
+    res.redirect('/settings?saved=1');
 });
 
 // Выход
