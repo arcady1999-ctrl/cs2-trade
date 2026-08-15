@@ -70,6 +70,28 @@ async function verifySteamLogin(req) {
     return null;
 }
 
+// API: получить инвентарь CS2 текущего пользователя
+app.get('/api/inventory', async (req, res) => {
+    try {
+        const steamId = req.session.steamId;
+        if (!steamId) {
+            return res.status(401).json({ error: 'Необходимо войти' });
+        }
+        // Используем Steam Community Web API для инвентаря CS2
+        // Работает без API-ключа, если инвентарь публичный
+        const url = `https://steamcommunity.com/inventory/${steamId}/730/2?l=russian&count=75`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            return res.status(response.status).json({ error: `Ошибка Steam: ${response.status}` });
+        }
+        const data = await response.json();
+        res.json(data);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    }
+});
+
 // API: текущий пользователь
 app.get('/api/user', (req, res) => {
     if (req.session.steamId) {

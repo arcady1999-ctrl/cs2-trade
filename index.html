@@ -30,6 +30,7 @@
         nav {
             display: flex;
             gap: 20px;
+            align-items: center;
         }
         nav a {
             color: #ccc;
@@ -79,6 +80,63 @@
             text-align: center;
             color: #777;
         }
+        .btn-action {
+            background: #4caf50;
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-action:hover {
+            background: #45a049;
+        }
+        .inventory-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            max-width: 900px;
+        }
+        .item-card {
+            background: #2b2b2b;
+            border-radius: 6px;
+            padding: 10px;
+            width: 120px;
+            text-align: center;
+            font-size: 14px;
+            color: #ccc;
+            transition: transform 0.1s;
+        }
+        .item-card:hover {
+            transform: scale(1.05);
+            background: #3a3a3a;
+        }
+        .item-card img {
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+            margin-bottom: 5px;
+        }
+        .item-name {
+            word-wrap: break-word;
+            line-height: 1.2em;
+            max-height: 2.4em;
+            overflow: hidden;
+        }
+        .item-count {
+            color: #888;
+            font-size: 12px;
+            margin-top: 3px;
+        }
+        #inventory-message {
+            color: #ff6b6b;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
@@ -87,31 +145,118 @@
         <nav>
             <a href="#">Главная</a>
             <a href="#">Мои обмены</a>
-            <a href="#">О проекте</a>
+            <a href="/settings">Настройки</a>
+            <a class="btn-steam" id="auth-button" href="/auth/steam">Войти через Steam</a>
         </nav>
-        <a class="btn-steam" id="auth-button" href="/auth/steam">Войти через Steam</a>
     </header>
     <div class="container">
         <h1>Обменивайся скинами CS2 напрямую</h1>
         <p class="intro">Без посредников и платёжных систем. Только ты и твой трейд-партнёр.</p>
-        <div class="trades-placeholder">
+
+        <!-- Кнопка загрузки инвентаря (появится после входа) -->
+        <button class="btn-action" id="load-inventory-btn" style="display: none;" onclick="loadInventory()">Показать мой инвентарь</button>
+
+        <!-- Сообщение об ошибке/статусе -->
+        <div id="inventory-message"></div>
+
+        <!-- Сетка инвентаря -->
+        <div class="inventory-grid" id="inventory-grid"></div>
+
+        <!-- Заглушка -->
+        <div class="trades-placeholder" id="trades-placeholder">
             Здесь скоро появятся объявления об обменах
         </div>
     </div>
+
     <script>
+        // Функция загрузки инвентаря
+        function loadInventory() {
+            const grid = document.getElementById('inventory-grid');
+            const message = document.getElementById('inventory-message');
+            grid.innerHTML = '';
+            message.textContent = 'Загрузка...';
+
+            fetch('/api/inventory')
+                .then(response => response.json())
+                .then(data => {
+                    message.textContent = '';
+
+                    // Если ошибка в ответе
+                    if (data.error) {
+                        message.textContent = 'Ошибка: ' + data.error;
+                        return;
+                    }
+
+                    // Если нет предметов
+                    if (!data.assets || data.assets.length === 0) {
+                        message.textContent = 'Инвентарь пуст или скрыт.';
+                        return;
+                    }
+
+                    // Строим карту описаний по classid
+                    const descriptions = {};
+                    if (data.descriptions) {
+                        data.descriptions.forEach(desc => {
+                            const key = desc.classid + '_' + desc.instanceid;
+                            descriptions[key] = desc;
+                        });
+                    }
+
+                    // Отображаем предметы (первые 50 для примера)
+                    const items = data.assets.slice(0, 50);
+                    items.forEach(asset => {
+                        const key = asset.classid + '_' + asset.instanceid;
+                        const desc = descriptions[key];
+                        if (!desc) return;
+
+                        const card = document.createElement('div');
+                        card.className = 'item-card';
+
+                        const img = document.createElement('img');
+                        // Формируем полный URL картинки
+                        const iconBase = 'https://community.akamai.steamstatic.com/economy/image/';
+                        img.src = iconBase + desc.icon_url;
+                        img.alt = desc.market_hash_name || 'Скин';
+                        img.loading = 'lazy';
+
+                        const name = document.createElement('div');
+                        name.className = 'item-name';
+                        name.textContent = desc.market_hash_name || 'Неизвестный предмет';
+
+                        const count = document.createElement('div');
+                        count.className = 'item-count';
+                        count.textContent = 'x' + (asset.amount || 1);
+
+                        card.appendChild(img);
+                        card.appendChild(name);
+                        card.appendChild(count);
+                        grid.appendChild(card);
+                    });
+
+                    if (grid.children.length === 0) {
+                        message.textContent = 'Не удалось отобразить предметы (возможно, нет descriptions).';
+                    }
+                })
+                .catch(err => {
+                    message.textContent = 'Ошибка сети: ' + err;
+                });
+        }
+
         // Проверяем статус входа при загрузке страницы
         fetch('/api/user')
             .then(response => response.json())
             .then(data => {
                 const authButton = document.getElementById('auth-button');
+                const loadBtn = document.getElementById('load-inventory-btn');
                 if (data.steamId) {
-                    // Пользователь вошёл
                     authButton.textContent = 'Привет, ' + data.steamId + ' (Выйти)';
                     authButton.href = '/logout';
+                    // Показываем кнопку "Показать мой инвентарь"
+                    loadBtn.style.display = 'inline-block';
                 } else {
-                    // Не вошёл
                     authButton.textContent = 'Войти через Steam';
                     authButton.href = '/auth/steam';
+                    loadBtn.style.display = 'none';
                 }
             })
             .catch(err => console.error('Ошибка получения статуса:', err));
