@@ -225,6 +225,29 @@
             border-radius: 4px;
             font-size: 16px;
         }
+        .pagination {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .pagination button {
+            background: #2a475e;
+            color: #fff;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .pagination button:disabled {
+            background: #444;
+            cursor: not-allowed;
+        }
+        .pagination span {
+            color: #ccc;
+            font-size: 14px;
+        }
         .hidden { display: none; }
         .form-group {
             margin-bottom: 15px;
@@ -283,6 +306,7 @@
             <div class="offer-list" id="offer-list">
                 <div style="color: #888;">Загрузка объявлений...</div>
             </div>
+            <div class="pagination" id="pagination"></div>
         </div>
     </div>
 
@@ -292,6 +316,8 @@
         let currentSteamId = null;
         let allOffers = []; // все объявления
         let showMyOffers = false; // фильтр "только мои"
+        let currentPage = 1;
+        const offersPerPage = 5;
 
         // Проверка статуса входа (теперь возвращает Promise)
         function checkAuth() {
@@ -473,9 +499,7 @@
                 .then(r => r.json())
                 .then(data => {
                     allOffers = data.offers || [];
-                    // Получаем уникальные steamId
                     const steamIds = [...new Set(allOffers.map(o => o.steamId))];
-                    // Загружаем профили всех авторов
                     return Promise.all(steamIds.map(id =>
                         fetch(`/api/profile/${id}`)
                             .then(r => r.json())
@@ -496,6 +520,7 @@
                             offer.authorAvatar = null;
                         }
                     });
+                    currentPage = 1;
                     applyFilters();
                 })
                 .catch(err => {
@@ -504,8 +529,8 @@
                 });
         }
 
-        // Применение фильтров (поиск + "мои")
-        function applyFilters() {
+        // Функция для получения отфильтрованного списка объявлений
+        function getFilteredOffers() {
             const query = document.getElementById('search-input').value.toLowerCase().trim();
             let filtered = allOffers;
 
@@ -517,7 +542,13 @@
                 filtered = filtered.filter(offer => offer.want.toLowerCase().includes(query));
             }
 
-            renderOffers(filtered);
+            return filtered;
+        }
+
+        // Применение фильтров (сбрасывает на первую страницу)
+        function applyFilters() {
+            currentPage = 1;
+            renderOffers(getFilteredOffers());
         }
 
         // Переключение фильтра "мои/все"
@@ -534,19 +565,24 @@
             applyFilters();
         }
 
-        // Отображение объявлений с аватарами и никами
+        // Отображение объявлений с пагинацией
         function renderOffers(offersToShow) {
             const list = document.getElementById('offer-list');
-            if (offersToShow.length > 0) {
+            const totalPages = Math.ceil(offersToShow.length / offersPerPage);
+            if (currentPage > totalPages) currentPage = totalPages;
+            const start = (currentPage - 1) * offersPerPage;
+            const end = start + offersPerPage;
+            const pageOffers = offersToShow.slice(start, end);
+
+            if (pageOffers.length > 0) {
                 list.innerHTML = '';
-                offersToShow.forEach(offer => {
+                pageOffers.forEach(offer => {
                     const card = document.createElement('div');
                     card.className = 'offer-card';
 
                     const info = document.createElement('div');
                     info.className = 'offer-info';
 
-                    // Блок автора
                     const authorDiv = document.createElement('div');
                     authorDiv.className = 'offer-author';
                     if (offer.authorAvatar) {
@@ -598,7 +634,6 @@
 
                     card.appendChild(info);
 
-                    // Предметы
                     const itemsDiv = document.createElement('div');
                     itemsDiv.className = 'offer-items';
                     offer.items.forEach(item => {
@@ -620,6 +655,33 @@
                 });
             } else {
                 list.innerHTML = '<div style="color: #888;">Пока нет объявлений.</div>';
+            }
+
+            // Обновляем пагинацию
+            renderPagination(totalPages);
+        }
+
+        function renderPagination(totalPages) {
+            const pagination = document.getElementById('pagination');
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+            pagination.innerHTML = `
+                <button onclick="changePage(-1)" ${currentPage === 1 ? 'disabled' : ''}>Назад</button>
+                <span>Страница ${currentPage} из ${totalPages}</span>
+                <button onclick="changePage(1)" ${currentPage === totalPages ? 'disabled' : ''}>Вперёд</button>
+            `;
+        }
+
+        // Переключение страницы без сброса фильтров
+        function changePage(delta) {
+            const filtered = getFilteredOffers();
+            const totalPages = Math.ceil(filtered.length / offersPerPage);
+            const newPage = currentPage + delta;
+            if (newPage >= 1 && newPage <= totalPages) {
+                currentPage = newPage;
+                renderOffers(filtered);
             }
         }
 
